@@ -17,7 +17,11 @@ object SubtleBug extends App {
 
   new Thread(new Runnable {
     override def run(): Unit = {
-      val events = Seq(new ProjectNames(Seq("p1", "p2")), NewDocument("p1", "/aaa", 1, "my-content"))
+      val events = Seq(
+        new ProjectNames(Seq("p1", "p2")),
+        NewDocument("p1", "/aaa", 1, "my-content"),
+        NewDocument("p1", "/bbb", 1, "my-content")
+      )
       events.foreach { event =>
         receivedEvents.onNext(event)
         Thread.sleep(200)
@@ -26,7 +30,20 @@ object SubtleBug extends App {
   }).start()
 
 
-  lazy val projects: Observable[Projects] = receivedEvents.scan(Option.empty[Projects]) {
+  //  lazy val projects: Observable[Projects] = receivedEvents.scan(Projects(Nil)) {
+  //    case (_, ProjectNames(names)) => {
+  //      Projects(names.map(name => Project(name)).toList)
+  //    }
+  //    case (ps, NewDocument(projectName, docPath, version, content)) => {
+  //      val doc = Doc(docPath, content)
+  //      ps.copy(projects = ps.projects.map {
+  //        case project if project.name == projectName => project.copy(docs = project.docs ::: List(doc))
+  //        case p => p
+  //      })
+  //    }
+  //  }
+
+  lazy val projects: Observable[Option[Projects]] = receivedEvents.scan(Option.empty[Projects]) {
     case (_, ProjectNames(names)) => {
       Some(Projects(names.map(name => Project(name)).toList))
     }
@@ -39,13 +56,14 @@ object SubtleBug extends App {
       Some(newPs)
     }
     case _ => None
-  }.collect({ case Some(p) => p })
-
-  lazy val projectNames: Observable[Seq[String]] = projects.map(_.projects.map(_.name))
+  }.collect({
+    case Some(p) => Some(p)
+    case None => None
+  })
 
   projects.foreach(ps => {
-    println("### 111: " + ps.projects.size)
-    projects.foreach(x => println("### 222: " + x.projects.size))
+    println("### 111: " + ps.map(_.projects))
+    projects.foreach(x => println("### 222: " + ps.map(_.projects))) // !!!(2)
   })
 
   Thread.sleep(2000)
